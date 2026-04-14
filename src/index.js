@@ -3,7 +3,11 @@ import cors from 'cors';
 import morgan from 'morgan';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+
+// Routes
 import userRoutes from './routes/userRoutes.js';
+import departmentRoutes from './routes/departmentRoutes.js';
+import kaizenRoutes from './routes/kaizenRoutes.js';
 
 dotenv.config();
 
@@ -16,8 +20,10 @@ app.use(cors());
 app.use(morgan('dev'));
 app.use(express.json());
 
-// Routes
+// Routes Registration
 app.use('/api/users', userRoutes);
+app.use('/api/departments', departmentRoutes);
+app.use('/api/kaizens', kaizenRoutes);
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'Kaizora API is running' });
