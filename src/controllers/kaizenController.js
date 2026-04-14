@@ -36,8 +36,10 @@ export const createKaizen = async (req, res) => {
  */
 export const getKaizens = async (req, res) => {
   try {
-    const { role, id: userId, department_id: userDeptId } = req.user;
-    let query = supabase.from('kaizens').select('*, profiles(full_name, email), departments(name)');
+    const { id: userId } = req.user;
+    const { role, department_id: userDeptId } = req.profile;
+    
+    let query = supabase.from('kaizens').select('*');
 
     // 1. Employee: only see their own submissions
     if (role === 'employee') {
@@ -56,7 +58,25 @@ export const getKaizens = async (req, res) => {
 
     if (error) throw error;
 
-    res.status(200).json({ status: 'success', data: { kaizens } });
+    // Manual joins to avoid PGRST201 / PGRST200 foreign key resolution issues
+    const { data: profiles } = await supabase.from('profiles').select('id, full_name, email');
+    const { data: departments } = await supabase.from('departments').select('id, name');
+
+    const mappedKaizens = kaizens.map(k => {
+      const submitter = profiles?.find(p => p.id === k.submitted_by);
+      const reviewer = profiles?.find(p => p.id === k.reviewed_by);
+      const dept = departments?.find(d => d.id === k.department_id);
+
+      return {
+        ...k,
+        departments: dept ? { name: dept.name } : null,
+        profiles: submitter ? { full_name: submitter.full_name, email: submitter.email } : null,
+        submitter: submitter || null,
+        reviewer: reviewer || null
+      };
+    });
+
+    res.status(200).json({ status: 'success', data: { kaizens: mappedKaizens } });
   } catch (error) {
     res.status(400).json({ status: 'fail', message: error.message });
   }
@@ -102,13 +122,140 @@ export const getKaizenById = async (req, res) => {
 
     const { data: kaizen, error } = await supabase
       .from('kaizens')
-      .select('*, profiles(full_name, email), departments(name), comments(*)')
+      .select('*')
       .eq('id', kaizenId)
       .single();
 
     if (error) throw error;
 
+    // Manual joins
+    const { data: profiles } = await supabase.from('profiles').select('id, full_name, email');
+    const { data: departments } = await supabase.from('departments').select('id, name');
+    
+    // Attempt to grab comments if the table exists
+    const { data: comments } = await supabase.from('comments').select('*').eq('kaizen_id', kaizenId).order('created_at', { ascending: true });
+
+    const submitter = profiles?.find(p => p.id === kaizen.submitted_by);
+    const reviewer = profiles?.find(p => p.id === kaizen.reviewed_by);
+    const dept = departments?.find(d => d.id === kaizen.department_id);
+
+    const mappedComments = comments?.map(c => {
+      const commenter = profiles?.find(p => p.id === c.user_id);
+      return {
+        ...c,
+        profiles: commenter ? { full_name: commenter.full_name, email: commenter.email } : null
+      };
+    }) || [];
+
+    const mappedKaizen = {
+      ...kaizen,
+      departments: dept ? { name: dept.name } : null,
+      profiles: submitter ? { full_name: submitter.full_name, email: submitter.email } : null,
+      submitter: submitter || null,
+      reviewer: reviewer || null,
+      comments: mappedComments
+    };
+
+    res.status(200).json({ status: 'success', data: { kaizen: mappedKaizen } });
+  } catch (error) {
+    res.status(400).json({ status: 'fail', message: error.message });
+  }
+};
+
+/**
+ * Get EXCLUSIVELY the current user's Kaizens (For My Kaizens portal)
+ */
+export const getMyKaizens = async (req, res) => {
+  try {
+    const { id: userId } = req.user;
+
+    const { data: kaizens, error } = await supabase
+      .from('kaizens')
+      .select('*')
+      .eq('submitted_by', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    const { data: departments } = await supabase.from('departments').select('id, name');
+
+    const mappedKaizens = kaizens.map(k => {
+      const dept = departments?.find(d => d.id === k.department_id);
+      return {
+        ...k,
+        departments: dept ? { name: dept.name } : null
+      };
+    });
+
+    res.status(200).json({ status: 'success', data: { kaizens: mappedKaizens } });
+  } catch (error) {
+    res.status(400).json({ status: 'fail', message: error.message });
+  }
+};
+
+/**
+ * Advanced Review & Evaluate
+ */
+export const evaluateKaizen = async (req, res) => {
+  try {
+    const { kaizenId } = req.params;
+    const { status, score, rejection_reason } = req.body;
+    const reviewerId = req.user.id;
+
+    const updateData = {
+      status,
+      score,
+      reviewed_by: reviewerId,
+      updated_at: new Date().toISOString()
+    };
+
+    if (rejection_reason !== undefined) {
+      updateData.rejection_reason = rejection_reason;
+    }
+
+    const { data: kaizen, error } = await supabase
+      .from('kaizens')
+      .update(updateData)
+      .eq('id', kaizenId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
     res.status(200).json({ status: 'success', data: { kaizen } });
+  } catch (error) {
+    res.status(400).json({ status: 'fail', message: error.message });
+  }
+};
+
+/**
+ * Add a comment to the discussion thread
+ */
+export const addComment = async (req, res) => {
+  try {
+    const { kaizenId } = req.params;
+    const { content } = req.body;
+    const userId = req.user.id;
+
+    if (!content) {
+      return res.status(400).json({ status: 'fail', message: 'Comment content is required' });
+    }
+
+    const { data: comment, error } = await supabase
+      .from('comments')
+      .insert([
+        {
+          kaizen_id: kaizenId,
+          user_id: userId,
+          content
+        }
+      ])
+      .select('*, profiles(full_name, email)')
+      .single();
+
+    if (error) throw error;
+
+    res.status(201).json({ status: 'success', data: { comment } });
   } catch (error) {
     res.status(400).json({ status: 'fail', message: error.message });
   }
