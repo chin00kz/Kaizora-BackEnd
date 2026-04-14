@@ -1,13 +1,24 @@
 import express from 'express';
-import * as userController from '../controllers/userController.js';
-import { verifyToken } from '../middleware/auth.js';
+import { verifyToken, restrictTo } from '../middleware/auth.js';
+import {
+  getMyProfile,
+  updateMyProfile,
+  getAllUsers,
+  updateUserRole,
+  toggleBanUser,
+  deleteUser,
+} from '../controllers/userController.js';
 
 const router = express.Router();
 
-// All user routes are protected
-router.use(verifyToken);
+// Current user routes
+router.get('/me', verifyToken, getMyProfile);
+router.patch('/me', verifyToken, updateMyProfile);
 
-router.get('/me', userController.getMyProfile);
-router.patch('/update-me', userController.updateMyProfile);
+// Admin management routes
+router.get('/', verifyToken, restrictTo('admin', 'superadmin'), getAllUsers);
+router.patch('/:userId/role', verifyToken, restrictTo('admin', 'superadmin'), updateUserRole);
+router.patch('/:userId/ban', verifyToken, restrictTo('admin', 'superadmin'), toggleBanUser);
+router.delete('/:userId', verifyToken, restrictTo('superadmin'), deleteUser);
 
 export default router;
