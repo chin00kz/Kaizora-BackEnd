@@ -57,7 +57,7 @@ export const adminCreateUser = async (req, res) => {
       return res.status(400).json({ status: 'fail', message: `Invalid role. Allowed: ${validRoles.join(', ')}` });
     }
 
-    // 1. Create user in Auth
+    // 1. Create user in Auth (admin-created users skip email confirmation & are pre-approved)
     const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
       email,
       password,
@@ -68,12 +68,14 @@ export const adminCreateUser = async (req, res) => {
     if (authError) throw authError;
 
     // 2. Profile is automatically created by the DB trigger, but we need to update role/dept
+    // Admin-created users are pre-approved (is_approved = true)
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .update({ 
         role: role || 'employee', 
         department_id: department_id || null,
-        full_name: full_name 
+        full_name: full_name,
+        is_approved: true
       })
       .eq('id', authUser.user.id)
       .select()
@@ -238,6 +240,32 @@ export const deleteUser = async (req, res) => {
     const { error } = await supabase.auth.admin.deleteUser(userId);
     if (error) throw error;
     res.status(200).json({ status: 'success', message: 'User deleted successfully' });
+  } catch (error) {
+    res.status(400).json({ status: 'fail', message: error.message });
+  }
+};
+
+/**
+ * Approve or un-approve a user (Admin / Superadmin only)
+ */
+export const approveUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { is_approved } = req.body;
+
+    const { data: targetProfile } = await supabase.from('profiles').select('role').eq('id', userId).single();
+    const guard = checkNotSuperAdmin(targetProfile);
+    if (guard.blocked) return res.status(403).json({ status: 'fail', message: guard.message });
+
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .update({ is_approved })
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.status(200).json({ status: 'success', data: { profile } });
   } catch (error) {
     res.status(400).json({ status: 'fail', message: error.message });
   }

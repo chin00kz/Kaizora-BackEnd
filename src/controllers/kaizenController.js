@@ -59,7 +59,7 @@ export const getKaizens = async (req, res) => {
     if (error) throw error;
 
     // Manual joins to avoid PGRST201 / PGRST200 foreign key resolution issues
-    const { data: profiles } = await supabase.from('profiles').select('id, full_name, email');
+    const { data: profiles } = await supabase.from('profiles').select('id, full_name, email, avatar_url');
     const { data: departments } = await supabase.from('departments').select('id, name');
 
     const mappedKaizens = kaizens.map(k => {
@@ -70,7 +70,7 @@ export const getKaizens = async (req, res) => {
       return {
         ...k,
         departments: dept ? { name: dept.name } : null,
-        profiles: submitter ? { full_name: submitter.full_name, email: submitter.email } : null,
+        profiles: submitter ? { full_name: submitter.full_name, email: submitter.email, avatar_url: submitter.avatar_url } : null,
         submitter: submitter || null,
         reviewer: reviewer || null
       };
@@ -150,7 +150,7 @@ export const getKaizenById = async (req, res) => {
     const mappedKaizen = {
       ...kaizen,
       departments: dept ? { name: dept.name } : null,
-      profiles: submitter ? { full_name: submitter.full_name, email: submitter.email } : null,
+      profiles: submitter ? { full_name: submitter.full_name, email: submitter.email, avatar_url: submitter.avatar_url } : null,
       submitter: submitter || null,
       reviewer: reviewer || null,
       comments: mappedComments
