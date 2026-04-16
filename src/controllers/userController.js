@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabase.js';
 import { checkNotSuperAdmin } from '../middleware/auth.js';
+import { getCachedData } from '../utils/cache.js';
 
 /**
  * Get current user's own profile
@@ -101,11 +102,16 @@ export const getAllUsers = async (req, res) => {
 
     if (error) throw error;
 
-    const { data: departments } = await supabase.from('departments').select('id, name');
+    const departments = await getCachedData('departments', async () => {
+      const { data } = await supabase.from('departments').select('id, name');
+      return data || [];
+    });
     
-    // Map department names manually to avoid foreign key errors in PostgREST
+    const deptMap = new Map((departments || []).map(d => [d.id, d]));
+
+    // Map department names manually via O(1) hash map
     const mappedProfiles = profiles.map(profile => {
-      const dept = departments?.find(d => d.id === profile.department_id);
+      const dept = deptMap.get(profile.department_id);
       return {
         ...profile,
         departments: dept ? { name: dept.name } : null
@@ -237,9 +243,79 @@ export const deleteUser = async (req, res) => {
     const guard = checkNotSuperAdmin(targetProfile);
     if (guard.blocked) return res.status(403).json({ status: 'fail', message: guard.message });
 
+    // To prevent foreign key constraint errors when deleting a user, we should delete their associated data first (optional but safer if cascade is not enabled)
+    await supabase.from('comments').delete().eq('user_id', userId);
+    await supabase.from('kaizens').delete().eq('submitted_by', userId);
+
     const { error } = await supabase.auth.admin.deleteUser(userId);
-    if (error) throw error;
+    if (error) {
+      // Sometimes auth deletion fails due to other constraints.
+      throw error;
+    }
     res.status(200).json({ status: 'success', message: 'User deleted successfully' });
+  } catch (error) {
+    res.status(400).json({ status: 'fail', message: error.message });
+  }
+};
+
+/**
+ * Update user details (Admin / Superadmin only)
+ */
+export const adminUpdateUserDetails = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { full_name, email } = req.body;
+
+    const { data: targetProfile } = await supabase.from('profiles').select('role').eq('id', userId).single();
+    const guard = checkNotSuperAdmin(targetProfile);
+    if (guard.blocked) return res.status(403).json({ status: 'fail', message: guard.message });
+
+    // Update email in Auth if provided
+    if (email) {
+      const { error: authError } = await supabase.auth.admin.updateUserById(userId, { email });
+      if (authError) throw authError;
+    }
+
+    // Update profile
+    const updateData = {};
+    if (full_name) updateData.full_name = full_name;
+    if (email) updateData.email = email;
+
+    if (Object.keys(updateData).length > 0) {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .update(updateData)
+        .eq('id', userId)
+        .select()
+        .single();
+      if (error) throw error;
+      return res.status(200).json({ status: 'success', data: { profile } });
+    }
+
+    res.status(200).json({ status: 'success', message: 'No profile details updated.' });
+  } catch (error) {
+    res.status(400).json({ status: 'fail', message: error.message });
+  }
+};
+
+/**
+ * Reset user password (Admin / Superadmin only)
+ */
+export const adminResetPassword = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { password } = req.body;
+
+    const { data: targetProfile } = await supabase.from('profiles').select('role').eq('id', userId).single();
+    const guard = checkNotSuperAdmin(targetProfile);
+    if (guard.blocked) return res.status(403).json({ status: 'fail', message: guard.message });
+
+    if (!password) return res.status(400).json({ status: 'fail', message: 'Password is required' });
+
+    const { error } = await supabase.auth.admin.updateUserById(userId, { password });
+    if (error) throw error;
+
+    res.status(200).json({ status: 'success', message: 'Password reset successfully' });
   } catch (error) {
     res.status(400).json({ status: 'fail', message: error.message });
   }

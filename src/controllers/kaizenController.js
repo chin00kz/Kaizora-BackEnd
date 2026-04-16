@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabase.js';
+import { getCachedData } from '../utils/cache.js';
 
 /**
  * Submit a new Kaizen (Any logged in user)
@@ -58,14 +59,24 @@ export const getKaizens = async (req, res) => {
 
     if (error) throw error;
 
-    // Manual joins to avoid PGRST201 / PGRST200 foreign key resolution issues
-    const { data: profiles } = await supabase.from('profiles').select('id, full_name, email, avatar_url');
-    const { data: departments } = await supabase.from('departments').select('id, name');
+    // Use cached and mapped queries to prevent N+1 hits and array lookup lag
+    const profiles = await getCachedData('profiles_basic', async () => {
+      const { data } = await supabase.from('profiles').select('id, full_name, email, avatar_url');
+      return data || [];
+    });
+
+    const departments = await getCachedData('departments', async () => {
+      const { data } = await supabase.from('departments').select('id, name');
+      return data || [];
+    });
+
+    const profileMap = new Map(profiles.map(p => [p.id, p]));
+    const deptMap = new Map(departments.map(d => [d.id, d]));
 
     const mappedKaizens = kaizens.map(k => {
-      const submitter = profiles?.find(p => p.id === k.submitted_by);
-      const reviewer = profiles?.find(p => p.id === k.reviewed_by);
-      const dept = departments?.find(d => d.id === k.department_id);
+      const submitter = profileMap.get(k.submitted_by);
+      const reviewer = profileMap.get(k.reviewed_by);
+      const dept = deptMap.get(k.department_id);
 
       return {
         ...k,
@@ -128,19 +139,29 @@ export const getKaizenById = async (req, res) => {
 
     if (error) throw error;
 
-    // Manual joins
-    const { data: profiles } = await supabase.from('profiles').select('id, full_name, email');
-    const { data: departments } = await supabase.from('departments').select('id, name');
+    // Utilize caching and maps for relation resolution
+    const profiles = await getCachedData('profiles_basic', async () => {
+      const { data } = await supabase.from('profiles').select('id, full_name, email, avatar_url');
+      return data || [];
+    });
+
+    const departments = await getCachedData('departments', async () => {
+      const { data } = await supabase.from('departments').select('id, name');
+      return data || [];
+    });
     
     // Attempt to grab comments if the table exists
     const { data: comments } = await supabase.from('comments').select('*').eq('kaizen_id', kaizenId).order('created_at', { ascending: true });
 
-    const submitter = profiles?.find(p => p.id === kaizen.submitted_by);
-    const reviewer = profiles?.find(p => p.id === kaizen.reviewed_by);
-    const dept = departments?.find(d => d.id === kaizen.department_id);
+    const profileMap = new Map(profiles.map(p => [p.id, p]));
+    const deptMap = new Map(departments.map(d => [d.id, d]));
+
+    const submitter = profileMap.get(kaizen.submitted_by);
+    const reviewer = profileMap.get(kaizen.reviewed_by);
+    const dept = deptMap.get(kaizen.department_id);
 
     const mappedComments = comments?.map(c => {
-      const commenter = profiles?.find(p => p.id === c.user_id);
+      const commenter = profileMap.get(c.user_id);
       return {
         ...c,
         profiles: commenter ? { full_name: commenter.full_name, email: commenter.email } : null
@@ -177,10 +198,14 @@ export const getMyKaizens = async (req, res) => {
 
     if (error) throw error;
 
-    const { data: departments } = await supabase.from('departments').select('id, name');
+    const departments = await getCachedData('departments', async () => {
+      const { data } = await supabase.from('departments').select('id, name');
+      return data || [];
+    });
+    const deptMap = new Map(departments.map(d => [d.id, d]));
 
     const mappedKaizens = kaizens.map(k => {
-      const dept = departments?.find(d => d.id === k.department_id);
+      const dept = deptMap.get(k.department_id);
       return {
         ...k,
         departments: dept ? { name: dept.name } : null
@@ -256,6 +281,29 @@ export const addComment = async (req, res) => {
     if (error) throw error;
 
     res.status(201).json({ status: 'success', data: { comment } });
+  } catch (error) {
+    res.status(400).json({ status: 'fail', message: error.message });
+  }
+};
+
+/**
+ * Delete a Kaizen completely
+ */
+export const deleteKaizen = async (req, res) => {
+  try {
+    const { kaizenId } = req.params;
+
+    // Optional but safe: delete associated comments first
+    await supabase.from('comments').delete().eq('kaizen_id', kaizenId);
+
+    const { error } = await supabase
+      .from('kaizens')
+      .delete()
+      .eq('id', kaizenId);
+
+    if (error) throw error;
+
+    res.status(200).json({ status: 'success', message: 'Kaizen deleted successfully' });
   } catch (error) {
     res.status(400).json({ status: 'fail', message: error.message });
   }

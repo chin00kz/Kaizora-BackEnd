@@ -7,7 +7,8 @@ import {
   getKaizenById,
   updateKaizenStatus,
   evaluateKaizen,
-  addComment
+  addComment,
+  deleteKaizen
 } from '../controllers/kaizenController.js';
 
 const router = express.Router();
@@ -22,5 +23,6 @@ router.get('/:kaizenId', verifyToken, getKaizenById);
 router.patch('/:kaizenId/status', verifyToken, restrictTo('qdm', 'hod', 'admin', 'superadmin'), updateKaizenStatus);
 router.patch('/:kaizenId/evaluate', verifyToken, restrictTo('qdm', 'hod', 'admin', 'superadmin'), evaluateKaizen);
 router.post('/:kaizenId/comments', verifyToken, addComment);
+router.delete('/:kaizenId', verifyToken, restrictTo('admin', 'superadmin'), deleteKaizen);
 
 export default router;

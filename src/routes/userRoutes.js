@@ -11,6 +11,8 @@ import {
   toggleBanUser,
   deleteUser,
   approveUser,
+  adminUpdateUserDetails,
+  adminResetPassword,
 } from '../controllers/userController.js';
 
 const router = express.Router();
@@ -29,6 +31,8 @@ router.patch('/:userId/ban', verifyToken, restrictTo('admin', 'superadmin'), tog
 router.patch('/:userId/role', verifyToken, restrictTo('admin', 'superadmin'), updateUserRole);
 router.patch('/:userId/department', verifyToken, restrictTo('admin', 'superadmin'), assignDepartment);
 router.get('/:userId/stats', verifyToken, restrictTo('admin', 'superadmin'), getUserStats);
-router.delete('/:userId', verifyToken, restrictTo('superadmin'), deleteUser);
+router.patch('/:userId/details', verifyToken, restrictTo('admin', 'superadmin'), adminUpdateUserDetails);
+router.patch('/:userId/reset-password', verifyToken, restrictTo('admin', 'superadmin'), adminResetPassword);
+router.delete('/:userId', verifyToken, restrictTo('admin', 'superadmin'), deleteUser);
 
 export default router;
