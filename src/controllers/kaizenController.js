@@ -39,13 +39,13 @@ export const getKaizens = async (req, res) => {
   try {
     const { id: userId } = req.user;
     const { role, department_id: userDeptId } = req.profile;
-    
+
     let query = supabase.from('kaizens').select('*');
 
     // 1. Employee: only see their own submissions
     if (role === 'employee') {
       query = query.eq('submitted_by', userId);
-    } 
+    }
     // 2. HOD: see their own submissions AND submissions from their department
     else if (role === 'hod') {
       query = query.or(`submitted_by.eq.${userId},department_id.eq.${userDeptId}`);
@@ -149,7 +149,7 @@ export const getKaizenById = async (req, res) => {
       const { data } = await supabase.from('departments').select('id, name');
       return data || [];
     });
-    
+
     // Attempt to grab comments if the table exists
     const { data: comments } = await supabase.from('comments').select('*').eq('kaizen_id', kaizenId).order('created_at', { ascending: true });
 
