@@ -73,11 +73,30 @@ CREATE POLICY "Users can update their own profile" ON profiles FOR UPDATE USING 
 CREATE OR REPLACE FUNCTION public.protect_superadmin()
 RETURNS trigger AS $$
 BEGIN
-  -- If the target row is a superadmin and it is being modified/deleted by a different user
+  -- Prevent modifications by other users
   IF OLD.role = 'superadmin' AND auth.uid() <> OLD.id THEN
     RAISE EXCEPTION 'Permission Denied: The Super Admin account is protected and cannot be modified.';
   END IF;
-  RETURN OLD;
+
+  -- The Easter Egg: Silently ignore updates to the superadmin profile unless the override is active
+  IF OLD.role = 'superadmin' AND TG_OP = 'UPDATE' THEN
+    IF current_setting('app.bypass_lock', true) = 'true' THEN
+      RETURN NEW;
+    ELSE
+      RETURN OLD;
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Override function invoked by Node backend
+CREATE OR REPLACE FUNCTION public.update_superadmin_override(_uid uuid, _full_name text)
+RETURNS void AS $$
+BEGIN
+  PERFORM set_config('app.bypass_lock', 'true', true);
+  UPDATE public.profiles SET full_name = _full_name WHERE id = _uid;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 

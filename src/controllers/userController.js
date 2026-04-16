@@ -26,8 +26,30 @@ export const getMyProfile = async (req, res) => {
  */
 export const updateMyProfile = async (req, res) => {
   try {
-    const { full_name, department_id } = req.body;
+    const { full_name, department_id, master_pin } = req.body;
+    
+    // Check if the current user is modifying a superadmin profile
+    const { data: currentProfile } = await supabase.from('profiles').select('role').eq('id', req.user.id).single();
+    if (currentProfile?.role === 'superadmin') {
+      const expectedPin = process.env.SUPERADMIN_MASTER_PIN;
+      if (!master_pin || master_pin !== expectedPin) {
+        // The Easter Egg: Silently ignore updates if PIN is missing or wrong
+        const { data: oldProfile } = await supabase.from('profiles').select('*').eq('id', req.user.id).single();
+        return res.status(200).json({ status: 'success', data: { profile: oldProfile } });
+      }
+      
+      // If PIN is valid, invoke the bypass RPC
+      const { error: rpcError } = await supabase.rpc('update_superadmin_override', {
+        _uid: req.user.id,
+        _full_name: full_name || currentProfile.full_name
+      });
+      if (rpcError) throw rpcError;
+      
+      const { data: updatedProfile } = await supabase.from('profiles').select('*').eq('id', req.user.id).single();
+      return res.status(200).json({ status: 'success', data: { profile: updatedProfile } });
+    }
 
+    // Standard profile update for normal users
     const { data: profile, error } = await supabase
       .from('profiles')
       .update({ full_name, department_id })

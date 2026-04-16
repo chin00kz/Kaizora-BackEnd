@@ -16,11 +16,17 @@ const supabase = createClient(
 );
 
 const SUPERADMIN = {
-  email: 'chanuka.main@gmail.com',
-  password: 'jaramaintern123$',
-  username: 'J.IT.Intern',
-  full_name: 'J.IT.Intern',
+  email: process.env.SUPERADMIN_EMAIL,
+  password: process.env.SUPERADMIN_PASSWORD,
+  username: process.env.SUPERADMIN_USERNAME || 'SuperAdmin',
+  full_name: process.env.SUPERADMIN_FULL_NAME || 'Super Administrator',
 };
+
+if (!SUPERADMIN.email || !SUPERADMIN.password) {
+  console.error('❌ Missing SUPERADMIN_EMAIL or SUPERADMIN_PASSWORD in environment variables.');
+  console.error('Please define them in your .env file.');
+  process.exit(1);
+}
 
 async function initSuperAdmin() {
   console.log('🚀 Initializing Kaizora Super Admin...\n');
