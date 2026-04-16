@@ -28,24 +28,41 @@ export const updateMyProfile = async (req, res) => {
   try {
     const { full_name, department_id, master_pin } = req.body;
     
+    console.log(`[updateMyProfile] Request body:`, req.body);
+
     // Check if the current user is modifying a superadmin profile
-    const { data: currentProfile } = await supabase.from('profiles').select('role').eq('id', req.user.id).single();
+    const { data: currentProfile, error: profileErr } = await supabase.from('profiles').select('role, full_name').eq('id', req.user.id).single();
+    console.log(`[updateMyProfile] currentProfile:`, currentProfile, 'Error:', profileErr);
+
     if (currentProfile?.role === 'superadmin') {
       const expectedPin = process.env.SUPERADMIN_MASTER_PIN;
-      if (!master_pin || master_pin !== expectedPin) {
+      const cleanExpectedPin = expectedPin ? expectedPin.toString().trim() : '';
+      const cleanMasterPin = master_pin ? master_pin.toString().trim() : '';
+
+      console.log(`[updateMyProfile] Superadmin detected. Expected PIN: "${cleanExpectedPin}", Received: "${cleanMasterPin}"`);
+      
+      if (!cleanMasterPin || cleanMasterPin !== cleanExpectedPin) {
         // The Easter Egg: Silently ignore updates if PIN is missing or wrong
+        console.log(`[updateMyProfile] PIN mismatched. Silently bypassing.`);
         const { data: oldProfile } = await supabase.from('profiles').select('*').eq('id', req.user.id).single();
         return res.status(200).json({ status: 'success', data: { profile: oldProfile } });
       }
       
       // If PIN is valid, invoke the bypass RPC
-      const { error: rpcError } = await supabase.rpc('update_superadmin_override', {
+      console.log(`[updateMyProfile] Valid PIN. Invoking RPC with name:`, full_name || currentProfile.full_name);
+      
+      const { data: rpcData, error: rpcError } = await supabase.rpc('update_superadmin_override', {
         _uid: req.user.id,
         _full_name: full_name || currentProfile.full_name
       });
+      
+      console.log(`[updateMyProfile] RPC Result:`, rpcData, 'Error:', rpcError);
+      
       if (rpcError) throw rpcError;
       
       const { data: updatedProfile } = await supabase.from('profiles').select('*').eq('id', req.user.id).single();
+      console.log(`[updateMyProfile] Final Profile:`, updatedProfile.full_name);
+      
       return res.status(200).json({ status: 'success', data: { profile: updatedProfile } });
     }
 
@@ -61,6 +78,7 @@ export const updateMyProfile = async (req, res) => {
 
     res.status(200).json({ status: 'success', data: { profile } });
   } catch (error) {
+    console.error(`[updateMyProfile] Catch Error:`, error);
     res.status(400).json({ status: 'fail', message: error.message });
   }
 };
