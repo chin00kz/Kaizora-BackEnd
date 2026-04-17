@@ -20,7 +20,7 @@ export const verifyToken = async (req, res, next) => {
     // Fetch the user's profile to get role info
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role, is_banned, username')
+      .select('id, role, is_banned, username')
       .eq('id', user.id)
       .single();
 
