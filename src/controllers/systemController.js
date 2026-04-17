@@ -35,15 +35,15 @@ export const updateSystemSettings = async (req, res) => {
       if (mode === 'superadmin-only' && req.profile.role !== 'superadmin') {
         return res.status(403).json({ status: 'fail', message: 'Only a Superadmin can activate Superadmin-only maintenance mode.' });
       }
-      updates.push(supabase.from('system_settings').upsert({ key: 'maintenance_mode', value: JSON.stringify(mode) }, { onConflict: 'key' }));
+      updates.push(supabase.from('system_settings').upsert({ key: 'maintenance_mode', value: mode }, { onConflict: 'key' }));
     }
 
     if (message !== undefined) {
-      updates.push(supabase.from('system_settings').upsert({ key: 'maintenance_message', value: JSON.stringify(message) }, { onConflict: 'key' }));
+      updates.push(supabase.from('system_settings').upsert({ key: 'maintenance_message', value: message }, { onConflict: 'key' }));
     }
 
     if (req.body.debug_mode !== undefined) {
-      updates.push(supabase.from('system_settings').upsert({ key: 'api_debug_mode', value: JSON.stringify(req.body.debug_mode) }, { onConflict: 'key' }));
+      updates.push(supabase.from('system_settings').upsert({ key: 'api_debug_mode', value: req.body.debug_mode }, { onConflict: 'key' }));
     }
 
     const results = await Promise.all(updates);

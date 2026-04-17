@@ -22,7 +22,11 @@ export const maintenanceGuard = async (req, res, next) => {
 
     if (error || !setting) return next();
 
-    const mode = setting.value;
+    let mode = setting.value;
+    // Strip surrounding quotes if present (due to legacy double-serialization)
+    if (typeof mode === 'string' && mode.startsWith('"') && mode.endsWith('"')) {
+      mode = mode.substring(1, mode.length - 1);
+    }
 
     if (mode === 'none') return next();
 
