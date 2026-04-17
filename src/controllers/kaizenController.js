@@ -231,6 +231,7 @@ export const evaluateKaizen = async (req, res) => {
       status,
       score,
       reviewed_by: reviewerId,
+      reviewed_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
 

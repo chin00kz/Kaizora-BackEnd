@@ -8,6 +8,10 @@ import dotenv from 'dotenv';
 import userRoutes from './routes/userRoutes.js';
 import departmentRoutes from './routes/departmentRoutes.js';
 import kaizenRoutes from './routes/kaizenRoutes.js';
+import systemRoutes from './routes/systemRoutes.js';
+import analyticsRoutes from './routes/analyticsRoutes.js';
+import { maintenanceGuard } from './middleware/maintenanceMiddleware.js';
+import { loggerMiddleware } from './middleware/loggerMiddleware.js';
 
 dotenv.config();
 
@@ -20,10 +24,16 @@ app.use(cors());
 app.use(morgan('dev'));
 app.use(express.json());
 
+// Global Guards & Logging
+app.use(maintenanceGuard);
+app.use(loggerMiddleware);
+
 // Routes Registration
+app.use('/api/system', systemRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/kaizens', kaizenRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'Kaizora API is running' });

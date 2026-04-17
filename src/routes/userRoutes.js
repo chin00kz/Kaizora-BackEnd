@@ -14,6 +14,7 @@ import {
   adminUpdateUserDetails,
   adminResetPassword,
 } from '../controllers/userController.js';
+import { broadcastNotification } from '../controllers/notificationController.js';
 
 const router = express.Router();
 
@@ -24,6 +25,7 @@ router.patch('/me', verifyToken, updateMyProfile);
 // Admin management routes
 router.get('/', verifyToken, restrictTo('admin', 'superadmin'), getAllUsers);
 router.post('/create', verifyToken, restrictTo('admin', 'superadmin'), adminCreateUser);
+router.post('/broadcast', verifyToken, restrictTo('superadmin'), broadcastNotification);
 
 // Specific ID-based actions
 router.patch('/:userId/approve', verifyToken, restrictTo('admin', 'superadmin'), approveUser);
