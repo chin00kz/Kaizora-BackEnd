@@ -2,6 +2,50 @@ import { supabase } from '../config/supabase.js';
 import { getCachedData } from '../utils/cache.js';
 
 /**
+ * Resolve a set of user IDs to profile objects.
+ * First tries public.profiles, then falls back to auth.users for any not found.
+ */
+async function resolveProfiles(userIds) {
+  const profileMap = new Map();
+  if (userIds.size === 0) return profileMap;
+
+  const ids = [...userIds];
+
+  // 1. Try public.profiles first
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, full_name, email, avatar_url')
+    .in('id', ids);
+
+  if (profiles) {
+    profiles.forEach(p => profileMap.set(p.id, p));
+  }
+
+  // 2. For any IDs still missing, fall back to auth.users (admin API)
+  const missingIds = ids.filter(id => !profileMap.has(id));
+  if (missingIds.length > 0) {
+    console.log(`[resolveProfiles] ${missingIds.length} IDs not in profiles table, fetching from auth.users`);
+    await Promise.all(missingIds.map(async (id) => {
+      try {
+        const { data: { user }, error } = await supabase.auth.admin.getUserById(id);
+        if (!error && user) {
+          profileMap.set(id, {
+            id: user.id,
+            full_name: user.user_metadata?.full_name || null,
+            email: user.email,
+            avatar_url: user.user_metadata?.avatar_url || null
+          });
+        }
+      } catch (e) {
+        console.warn(`[resolveProfiles] Could not resolve user ${id}:`, e.message);
+      }
+    }));
+  }
+
+  return profileMap;
+}
+
+/**
  * Submit a new Kaizen (Any logged in user)
  */
 export const createKaizen = async (req, res) => {
@@ -59,36 +103,39 @@ export const getKaizens = async (req, res) => {
 
     if (error) throw error;
 
-    // Use cached and mapped queries to prevent N+1 hits and array lookup lag
-    const profiles = await getCachedData('profiles_basic', async () => {
-      const { data } = await supabase.from('profiles').select('id, full_name, email, avatar_url');
-      return data || [];
+    // Collect all unique user IDs from this result set
+    const userIds = new Set();
+    kaizens.forEach(k => {
+      if (k.submitted_by) userIds.add(k.submitted_by);
+      if (k.reviewed_by) userIds.add(k.reviewed_by);
     });
+
+    // Resolve all user profiles (falls back to auth.users if not in profiles table)
+    const profileMap = await resolveProfiles(userIds);
 
     const departments = await getCachedData('departments', async () => {
       const { data } = await supabase.from('departments').select('id, name');
       return data || [];
     });
-
-    const profileMap = new Map(profiles.map(p => [p.id, p]));
     const deptMap = new Map(departments.map(d => [d.id, d]));
 
     const mappedKaizens = kaizens.map(k => {
-      const submitter = profileMap.get(k.submitted_by);
-      const reviewer = profileMap.get(k.reviewed_by);
-      const dept = deptMap.get(k.department_id);
+      const submitter = profileMap.get(k.submitted_by) || null;
+      const reviewer = profileMap.get(k.reviewed_by) || null;
+      const dept = deptMap.get(k.department_id) || null;
 
       return {
         ...k,
         departments: dept ? { name: dept.name } : null,
         profiles: submitter ? { full_name: submitter.full_name, email: submitter.email, avatar_url: submitter.avatar_url } : null,
-        submitter: submitter || null,
-        reviewer: reviewer || null
+        submitter: submitter,
+        reviewer: reviewer
       };
     });
 
     res.status(200).json({ status: 'success', data: { kaizens: mappedKaizens } });
   } catch (error) {
+    console.error('[getKaizens] Error:', error);
     res.status(400).json({ status: 'fail', message: error.message });
   }
 };
@@ -139,32 +186,39 @@ export const getKaizenById = async (req, res) => {
 
     if (error) throw error;
 
-    // Utilize caching and maps for relation resolution
-    const profiles = await getCachedData('profiles_basic', async () => {
-      const { data } = await supabase.from('profiles').select('id, full_name, email, avatar_url');
-      return data || [];
-    });
+    // Fetch comments
+    const { data: comments } = await supabase
+      .from('comments')
+      .select('*')
+      .eq('kaizen_id', kaizenId)
+      .order('created_at', { ascending: true });
+
+    // Collect all unique user IDs we need to resolve
+    const userIds = new Set();
+    if (kaizen.submitted_by) userIds.add(kaizen.submitted_by);
+    if (kaizen.reviewed_by) userIds.add(kaizen.reviewed_by);
+    comments?.forEach(c => { if (c.user_id) userIds.add(c.user_id); });
+
+    // Resolve all user profiles (falls back to auth.users if not in profiles table)
+    const profileMap = await resolveProfiles(userIds);
 
     const departments = await getCachedData('departments', async () => {
       const { data } = await supabase.from('departments').select('id, name');
       return data || [];
     });
-
-    // Attempt to grab comments if the table exists
-    const { data: comments } = await supabase.from('comments').select('*').eq('kaizen_id', kaizenId).order('created_at', { ascending: true });
-
-    const profileMap = new Map(profiles.map(p => [p.id, p]));
     const deptMap = new Map(departments.map(d => [d.id, d]));
 
-    const submitter = profileMap.get(kaizen.submitted_by);
-    const reviewer = profileMap.get(kaizen.reviewed_by);
-    const dept = deptMap.get(kaizen.department_id);
+    const submitter = profileMap.get(kaizen.submitted_by) || null;
+    const reviewer = profileMap.get(kaizen.reviewed_by) || null;
+    const dept = deptMap.get(kaizen.department_id) || null;
 
     const mappedComments = comments?.map(c => {
       const commenter = profileMap.get(c.user_id);
       return {
         ...c,
-        profiles: commenter ? { full_name: commenter.full_name, email: commenter.email } : null
+        profiles: commenter
+          ? { full_name: commenter.full_name, email: commenter.email, avatar_url: commenter.avatar_url }
+          : null
       };
     }) || [];
 
@@ -172,13 +226,14 @@ export const getKaizenById = async (req, res) => {
       ...kaizen,
       departments: dept ? { name: dept.name } : null,
       profiles: submitter ? { full_name: submitter.full_name, email: submitter.email, avatar_url: submitter.avatar_url } : null,
-      submitter: submitter || null,
-      reviewer: reviewer || null,
+      submitter: submitter,
+      reviewer: reviewer,
       comments: mappedComments
     };
 
     res.status(200).json({ status: 'success', data: { kaizen: mappedKaizen } });
   } catch (error) {
+    console.error('[getKaizenById] Error:', error);
     res.status(400).json({ status: 'fail', message: error.message });
   }
 };
@@ -276,12 +331,26 @@ export const addComment = async (req, res) => {
           content
         }
       ])
-      .select('*, profiles(full_name, email)')
+      .select()
       .single();
 
     if (error) throw error;
 
-    res.status(201).json({ status: 'success', data: { comment } });
+    // Manually fetch the commenter's profile (avoids relying on FK join)
+    const { data: commenterProfile } = await supabase
+      .from('profiles')
+      .select('id, full_name, email, avatar_url')
+      .eq('id', userId)
+      .single();
+
+    const enrichedComment = {
+      ...comment,
+      profiles: commenterProfile
+        ? { full_name: commenterProfile.full_name, email: commenterProfile.email, avatar_url: commenterProfile.avatar_url }
+        : null
+    };
+
+    res.status(201).json({ status: 'success', data: { comment: enrichedComment } });
   } catch (error) {
     res.status(400).json({ status: 'fail', message: error.message });
   }
