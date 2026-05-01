@@ -8,6 +8,7 @@ import {
   getSystemLogs,
   clearSystemLogs
 } from '../controllers/systemController.js';
+import { getAuditLogs, createAuditLog } from '../controllers/auditController.js';
 import { getAboutContent, updateCreatorProfile } from '../controllers/aboutController.js';
 
 const router = express.Router();
@@ -21,6 +22,10 @@ router.patch('/banner', verifyToken, restrictTo('qdm', 'admin', 'superadmin'), u
 router.get('/logs', verifyToken, restrictTo('superadmin'), getSystemLogs);
 router.delete('/logs', verifyToken, restrictTo('superadmin'), clearSystemLogs);
 router.delete('/nuclear/purge-rejected', verifyToken, restrictTo('superadmin'), purgeRejectedKaizens);
+
+// Audit Logging
+router.post('/audit', verifyToken, createAuditLog);
+router.get('/audit', verifyToken, restrictTo('superadmin', 'admin'), getAuditLogs);
 
 // About Page Endpoints
 router.get('/about', getAboutContent);

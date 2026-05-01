@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabase.js';
+import { logAuditAction } from './auditController.js';
 
 /**
  * Get all departments
@@ -33,6 +34,15 @@ export const createDepartment = async (req, res) => {
 
     if (error) throw error;
 
+    await logAuditAction(
+      req.user.id, 
+      req.profile?.full_name || req.profile?.username, 
+      'CREATE_DEPARTMENT', 
+      'departments', 
+      department.id, 
+      { name }
+    );
+
     res.status(201).json({ status: 'success', data: { department } });
   } catch (error) {
     res.status(400).json({ status: 'fail', message: error.message });
@@ -56,6 +66,15 @@ export const updateDepartment = async (req, res) => {
 
     if (error) throw error;
 
+    await logAuditAction(
+      req.user.id, 
+      req.profile?.full_name || req.profile?.username, 
+      'UPDATE_DEPARTMENT', 
+      'departments', 
+      id, 
+      { name }
+    );
+
     res.status(200).json({ status: 'success', data: { department } });
   } catch (error) {
     res.status(400).json({ status: 'fail', message: error.message });
@@ -75,6 +94,15 @@ export const deleteDepartment = async (req, res) => {
       .eq('id', id);
 
     if (error) throw error;
+
+    await logAuditAction(
+      req.user.id, 
+      req.profile?.full_name || req.profile?.username, 
+      'DELETE_DEPARTMENT', 
+      'departments', 
+      id, 
+      {}
+    );
 
     res.status(200).json({ status: 'success', message: 'Department deleted successfully' });
   } catch (error) {

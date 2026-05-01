@@ -1,6 +1,7 @@
 import { supabase } from '../config/supabase.js';
 import { checkNotSuperAdmin } from '../middleware/auth.js';
 import { getCachedData } from '../utils/cache.js';
+import { logAuditAction } from './auditController.js';
 
 /**
  * Get current user's own profile
@@ -124,6 +125,15 @@ export const adminCreateUser = async (req, res) => {
 
     if (profileError) throw profileError;
 
+    await logAuditAction(
+      req.user.id, 
+      req.profile?.full_name || req.profile?.username, 
+      'CREATE_USER', 
+      'profiles', 
+      authUser.user.id, 
+      { email, role, department_id }
+    );
+
     res.status(201).json({ status: 'success', data: { user: profile } });
   } catch (error) {
     res.status(400).json({ status: 'fail', message: error.message });
@@ -190,6 +200,15 @@ export const updateUserRole = async (req, res) => {
 
     if (error) throw error;
 
+    await logAuditAction(
+      req.user.id, 
+      req.profile?.full_name || req.profile?.username, 
+      'UPDATE_USER_ROLE', 
+      'profiles', 
+      userId, 
+      { role }
+    );
+
     res.status(200).json({ status: 'success', data: { profile } });
   } catch (error) {
     res.status(400).json({ status: 'fail', message: error.message });
@@ -212,6 +231,15 @@ export const assignDepartment = async (req, res) => {
       .single();
 
     if (error) throw error;
+
+    await logAuditAction(
+      req.user.id, 
+      req.profile?.full_name || req.profile?.username, 
+      'ASSIGN_USER_DEPARTMENT', 
+      'profiles', 
+      userId, 
+      { department_id }
+    );
 
     res.status(200).json({ status: 'success', data: { profile } });
   } catch (error) {
@@ -267,6 +295,16 @@ export const toggleBanUser = async (req, res) => {
       .single();
 
     if (error) throw error;
+
+    await logAuditAction(
+      req.user.id, 
+      req.profile?.full_name || req.profile?.username, 
+      is_banned ? 'BAN_USER' : 'UNBAN_USER', 
+      'profiles', 
+      userId, 
+      {}
+    );
+
     res.status(200).json({ status: 'success', data: { profile } });
   } catch (error) {
     res.status(400).json({ status: 'fail', message: error.message });
@@ -292,6 +330,16 @@ export const deleteUser = async (req, res) => {
       // Sometimes auth deletion fails due to other constraints.
       throw error;
     }
+
+    await logAuditAction(
+      req.user.id, 
+      req.profile?.full_name || req.profile?.username, 
+      'DELETE_USER', 
+      'profiles', 
+      userId, 
+      {}
+    );
+
     res.status(200).json({ status: 'success', message: 'User deleted successfully' });
   } catch (error) {
     res.status(400).json({ status: 'fail', message: error.message });
@@ -381,6 +429,16 @@ export const approveUser = async (req, res) => {
       .single();
 
     if (error) throw error;
+
+    await logAuditAction(
+      req.user.id, 
+      req.profile?.full_name || req.profile?.username, 
+      is_approved ? 'APPROVE_USER' : 'UNAPPROVE_USER', 
+      'profiles', 
+      userId, 
+      {}
+    );
+
     res.status(200).json({ status: 'success', data: { profile } });
   } catch (error) {
     res.status(400).json({ status: 'fail', message: error.message });

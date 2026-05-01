@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabase.js';
 import { getCachedData } from '../utils/cache.js';
+import { logAuditAction } from './auditController.js';
 
 /**
  * Resolve a set of user IDs to profile objects.
@@ -69,6 +70,15 @@ export const createKaizen = async (req, res) => {
       .single();
 
     if (error) throw error;
+
+    await logAuditAction(
+      req.user.id, 
+      req.profile?.full_name || req.profile?.username, 
+      'CREATE_KAIZEN', 
+      'kaizens', 
+      kaizen.id, 
+      { title: kaizen.title }
+    );
 
     res.status(201).json({ status: 'success', data: { kaizen } });
   } catch (error) {
@@ -164,6 +174,15 @@ export const updateKaizenStatus = async (req, res) => {
       .single();
 
     if (error) throw error;
+
+    await logAuditAction(
+      req.user.id, 
+      req.profile?.full_name || req.profile?.username, 
+      'UPDATE_KAIZEN_STATUS', 
+      'kaizens', 
+      kaizen.id, 
+      { status: kaizen.status }
+    );
 
     res.status(200).json({ status: 'success', data: { kaizen } });
   } catch (error) {
@@ -307,6 +326,15 @@ export const evaluateKaizen = async (req, res) => {
 
     if (error) throw error;
 
+    await logAuditAction(
+      reviewerId, 
+      req.profile?.full_name || req.profile?.username, 
+      'EVALUATE_KAIZEN', 
+      'kaizens', 
+      kaizen.id, 
+      { status: kaizen.status, score: kaizen.score }
+    );
+
     res.status(200).json({ status: 'success', data: { kaizen } });
   } catch (error) {
     res.status(400).json({ status: 'fail', message: error.message });
@@ -376,6 +404,15 @@ export const deleteKaizen = async (req, res) => {
       .eq('id', kaizenId);
 
     if (error) throw error;
+
+    await logAuditAction(
+      req.user.id, 
+      req.profile?.full_name || req.profile?.username, 
+      'DELETE_KAIZEN', 
+      'kaizens', 
+      kaizenId, 
+      {}
+    );
 
     res.status(200).json({ status: 'success', message: 'Kaizen deleted successfully' });
   } catch (error) {
