@@ -35,8 +35,14 @@ app.use('/api/departments', departmentRoutes);
 app.use('/api/kaizens', kaizenRoutes);
 app.use('/api/analytics', analyticsRoutes);
 
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', message: 'Kaizora API is running' });
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'OK', 
+    uptime: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+    env: process.env.NODE_ENV || 'development',
+    nodeVersion: process.version
+  });
 });
 
 // Error Handling Middleware
