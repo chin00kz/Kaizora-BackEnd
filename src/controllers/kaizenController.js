@@ -284,11 +284,15 @@ export const evaluateKaizen = async (req, res) => {
 
     const updateData = {
       status,
-      score,
       reviewed_by: reviewerId,
       reviewed_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
+
+    // Only update score when explicitly provided (approvals), not on rejections
+    if (score !== undefined && score !== null) {
+      updateData.score = score;
+    }
 
     if (rejection_reason !== undefined) {
       updateData.rejection_reason = rejection_reason;
