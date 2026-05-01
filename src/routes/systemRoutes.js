@@ -3,6 +3,7 @@ import { verifyToken, restrictTo } from '../middleware/auth.js';
 import { 
   getSystemStatus, 
   updateSystemSettings, 
+  updateBannerSettings,
   purgeRejectedKaizens,
   getSystemLogs,
   clearSystemLogs
@@ -16,6 +17,7 @@ router.get('/status', getSystemStatus);
 
 // Management (Protected)
 router.patch('/settings', verifyToken, restrictTo('admin', 'superadmin'), updateSystemSettings);
+router.patch('/banner', verifyToken, restrictTo('qdm', 'admin', 'superadmin'), updateBannerSettings);
 router.get('/logs', verifyToken, restrictTo('superadmin'), getSystemLogs);
 router.delete('/logs', verifyToken, restrictTo('superadmin'), clearSystemLogs);
 router.delete('/nuclear/purge-rejected', verifyToken, restrictTo('superadmin'), purgeRejectedKaizens);

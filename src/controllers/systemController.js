@@ -58,6 +58,35 @@ export const updateSystemSettings = async (req, res) => {
 };
 
 /**
+ * Update Hero Banner settings (QDM / Admin / Superadmin)
+ */
+export const updateBannerSettings = async (req, res) => {
+  try {
+    const { hero_banner_image, hero_banner_texts } = req.body;
+    const updates = [];
+
+    if (hero_banner_image !== undefined) {
+      updates.push(supabase.from('system_settings').upsert({ key: 'hero_banner_image', value: hero_banner_image }, { onConflict: 'key' }));
+    }
+
+    if (hero_banner_texts !== undefined) {
+      // Expecting hero_banner_texts to be a JSON stringified array or normal string
+      updates.push(supabase.from('system_settings').upsert({ key: 'hero_banner_texts', value: typeof hero_banner_texts === 'string' ? hero_banner_texts : JSON.stringify(hero_banner_texts) }, { onConflict: 'key' }));
+    }
+
+    if (updates.length > 0) {
+      const results = await Promise.all(updates);
+      const errors = results.map(r => r.error).filter(Boolean);
+      if (errors.length > 0) throw errors[0];
+    }
+
+    res.status(200).json({ status: 'success', message: 'Banner settings updated successfully.' });
+  } catch (error) {
+    res.status(400).json({ status: 'fail', message: error.message });
+  }
+};
+
+/**
  * Nuclear Action: Purge Rejected Kaizens (Superadmin only logic handled by route)
  */
 export const purgeRejectedKaizens = async (req, res) => {
