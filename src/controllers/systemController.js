@@ -33,7 +33,9 @@ export const updateSystemSettings = async (req, res) => {
     if (mode) {
       // Validate role permissions for higher modes
       if (mode === 'superadmin-only' && req.profile.role !== 'superadmin') {
-        return res.status(403).json({ status: 'fail', message: 'Only a Superadmin can activate Superadmin-only maintenance mode.' });
+        if (!req.body.master_pin || req.body.master_pin !== process.env.SUPERADMIN_MASTER_PIN) {
+          return res.status(403).json({ status: 'fail', message: 'Only a Superadmin or an authorized Master PIN user can activate Superadmin-only maintenance mode.' });
+        }
       }
       updates.push(supabase.from('system_settings').upsert({ key: 'maintenance_mode', value: mode }, { onConflict: 'key' }));
     }
@@ -44,6 +46,13 @@ export const updateSystemSettings = async (req, res) => {
 
     if (req.body.debug_mode !== undefined) {
       updates.push(supabase.from('system_settings').upsert({ key: 'api_debug_mode', value: req.body.debug_mode }, { onConflict: 'key' }));
+    }
+    
+    if (req.body.admin_bypass_pin !== undefined) {
+      if (req.profile.role !== 'superadmin') {
+        return res.status(403).json({ status: 'fail', message: 'Only a Superadmin can change the bypass PIN.' });
+      }
+      updates.push(supabase.from('system_settings').upsert({ key: 'admin_bypass_pin', value: req.body.admin_bypass_pin }, { onConflict: 'key' }));
     }
 
     const results = await Promise.all(updates);
@@ -136,6 +145,25 @@ export const clearSystemLogs = async (req, res) => {
     if (error) throw error;
 
     res.status(200).json({ status: 'success', message: 'System logs cleared.' });
+  } catch (error) {
+    res.status(400).json({ status: 'fail', message: error.message });
+  }
+};
+
+export const verifyMasterPin = async (req, res) => {
+  try {
+    const { pin } = req.body;
+    const masterPin = process.env.SUPERADMIN_MASTER_PIN;
+
+    if (!masterPin) {
+      return res.status(500).json({ status: 'fail', message: 'Master PIN not configured on server.' });
+    }
+
+    if (pin === masterPin) {
+      res.status(200).json({ status: 'success', message: 'Master PIN verified.', valid: true });
+    } else {
+      res.status(401).json({ status: 'fail', message: 'Invalid Master PIN.', valid: false });
+    }
   } catch (error) {
     res.status(400).json({ status: 'fail', message: error.message });
   }
