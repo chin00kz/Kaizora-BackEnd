@@ -1,11 +1,11 @@
-# 🚀 Kaizora Management System
+#  Kaizora Management System
 
-## 📖 Introduction
+## Introduction
 Kaizora is a specialized Kaizen tracking and management platform designed to streamline operations, facilitate user permissions, and track active submission flows.
 
 It employs a cleanly decoupled architecture featuring a modern React frontend and an Express-based Node.js backend proxy. Both halves of the application synchronize natively with **Supabase** acting as the fundamental source of truth for both Authentication (JWTs) and Database storage (PostgreSQL).
 
-## 🛠️ Complete Tech Stack
+##  Complete Tech Stack
 
 ### Frontend (`/Kaizora-FrontEnd`)
 *   **Framework**: React 19 + Vite (Runs as an SPA)
@@ -26,7 +26,7 @@ It employs a cleanly decoupled architecture featuring a modern React frontend an
 
 ---
 
-## 🏃‍♂️ Getting Started Locally
+##  Getting Started Locally
 
 Getting the system fully booted offline involves three essential parts: establishing the database, starting the API, and running the Vite server.
 
@@ -49,7 +49,7 @@ NODE_ENV=development
 SUPABASE_URL=your_project_url
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ```
-*(⚠️ **NOTE:** The backend uses the `SERVICE_ROLE_KEY` exclusively. This permits the Express endpoints to bypass normal user-auth protections securely when Admins invoke deep system changes).*
+*( **NOTE:** The backend uses the `SERVICE_ROLE_KEY` exclusively. This permits the Express endpoints to bypass normal user-auth protections securely when Admins invoke deep system changes).*
 
 Start the server:
 ```bash
@@ -69,7 +69,7 @@ VITE_SUPABASE_URL=your_project_url
 VITE_SUPABASE_ANON_KEY=your_public_anon_key
 VITE_API_URL=http://localhost:5000/api
 ```
-*(⚠️ **NOTE:** The frontend strictly uses the `ANON_KEY`. Never expose the Service Role key up here).*
+*( **NOTE:** The frontend strictly uses the `ANON_KEY`. Never expose the Service Role key up here).*
 
 Start the Vite compiler:
 ```bash
@@ -78,7 +78,7 @@ npm run dev
 
 ---
 
-## 🧠 System Architecture & "Gotchas"
+##  System Architecture & "Gotchas"
 
 For any new developer diving in, ensure you read these critical structural pillars:
 
