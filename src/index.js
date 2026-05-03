@@ -3,6 +3,7 @@ import cors from 'cors';
 import morgan from 'morgan';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import os from 'os';
 
 // Routes
 import userRoutes from './routes/userRoutes.js';
@@ -12,6 +13,7 @@ import systemRoutes from './routes/systemRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
 import { maintenanceGuard } from './middleware/maintenanceMiddleware.js';
 import { loggerMiddleware } from './middleware/loggerMiddleware.js';
+import { supabase } from './config/supabase.js';
 
 dotenv.config();
 
@@ -35,13 +37,40 @@ app.use('/api/departments', departmentRoutes);
 app.use('/api/kaizens', kaizenRoutes);
 app.use('/api/analytics', analyticsRoutes);
 
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
+  const memory = process.memoryUsage();
+  
+  // Test Database Connectivity
+  let dbStatus = 'CONNECTED';
+  try {
+    const { error } = await supabase.from('profiles').select('id').limit(1);
+    if (error) throw error;
+  } catch (e) {
+    dbStatus = 'DISCONNECTED';
+  }
+
   res.status(200).json({ 
     status: 'OK', 
     uptime: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
     env: process.env.NODE_ENV || 'development',
-    nodeVersion: process.version
+    nodeVersion: process.version,
+    platform: process.platform,
+    arch: process.arch,
+    region: process.env.RENDER_REGION || 'local-dev',
+    cpuCount: os.cpus().length,
+    loadAvg: os.loadavg(),
+    hostname: os.hostname(),
+    pid: process.pid,
+    osUptime: Math.floor(os.uptime()),
+    database: dbStatus,
+    memory: {
+      heapTotal: Math.round(memory.heapTotal / 1024 / 1024),
+      heapUsed: Math.round(memory.heapUsed / 1024 / 1024),
+      rss: Math.round(memory.rss / 1024 / 1024),
+      systemTotal: Math.round(os.totalmem() / 1024 / 1024 / 1024 * 10) / 10, // GB
+      systemFree: Math.round(os.freemem() / 1024 / 1024 / 1024 * 10) / 10 // GB
+    }
   });
 });
 
